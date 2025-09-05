@@ -83,7 +83,11 @@ from ..data.test_data import (
     dict_icare_0140,
     dict_ipcc_0005,
     dict_c40_0054,
+    dict_icare_0050,
+    dict_icare_0128,
+    dict_icare_0045,
     DUMMY_CITY,
+    dict_bracz,
 )
 
 # Setup logging configuration
@@ -777,6 +781,9 @@ def ml_compare(city: dict, action_A: dict, action_B: dict) -> int:
         df_single = prepare_biome_data(df_single)
         df_single = prepare_final_features(df_single)
 
+        # Optional: visualize SHAP for this single action vs baseline
+        create_shap_waterfall(df_single, loaded_model)
+
         # Validate no missing values
         missing_columns_local = df_single.columns[df_single.isna().any()].tolist()
         df_single.dropna(inplace=True)
@@ -820,5 +827,6 @@ if __name__ == "__main__":
     # result = ml_compare(DUMMY_CITY, dict_ipcc_0005, dict_c40_0054)
     # result = ml_compare(DUMMY_CITY, dict_c40_0054, dict_ipcc_0005)
     # result = ml_compare(dict_brcci, dict_icare_0141, dict_icare_0142)
-    result = ml_compare(dict_brcci, dict_ipcc_0005, dict_c40_0054)
+    # result = ml_compare(dict_brcci, dict_ipcc_0005, dict_c40_0054)
+    result = ml_compare(dict_bracz, dict_icare_0050, dict_icare_0128)
     print("Test completed. Preferred Action: %s", result)
