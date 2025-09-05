@@ -91,9 +91,9 @@ def sign(x: int) -> int:
 # 6.  Property tests
 # ---------------------------------------------------------------------------
 
-N_PAIRS = 200  # number of random pairs for antisymmetry
-M_TRIPLES = 100  # number of random triples for transitivity
-RNG_SEED = 42  # reproducible randomness
+N_PAIRS = 500  # number of random pairs for antisymmetry
+M_TRIPLES = 300  # number of random triples for transitivity
+RNG_SEED = 10  # reproducible randomness
 
 
 @pytest.mark.slow

@@ -170,6 +170,11 @@ def ml_compare(city: dict, action_A: dict, action_B: dict) -> int:
         city.get("locode"),
     )
 
+    # NOTE: We will implement a transitive comparator by mapping each action
+    # to a scalar score using a fixed, neutral baseline action. We then compare
+    # the two scalar scores. This yields a total order (hence transitivity) and
+    # preserves antisymmetry without changing the underlying model.
+
     def build_df(city, action_A, action_B):
         """
         Create a DataFrame to hold the city data and the actions data.
@@ -729,58 +734,79 @@ def ml_compare(city: dict, action_A: dict, action_B: dict) -> int:
         else:
             return -1
 
-    # Build the DataFrame for comparison consisting of the city and the two actions
-    df = build_df(city, action_A, action_B)
+    # Define a fixed baseline action used to map each action to a scalar score.
+    baseline_action = {
+        "ActionID": "__baseline__",
+        "ActionType": ["mitigation", "adaptation"],
+        "Hazard": [],
+        "CoBenefits": {
+            "air_quality": 0,
+            "water_quality": 0,
+            "habitat": 0,
+            "cost_of_living": 0,
+            "housing": 0,
+            "mobility": 0,
+            "stakeholder_engagement": 0,
+        },
+        "GHGReductionPotential": {
+            "stationary_energy": 0,
+            "transportation": 0,
+            "waste": 0,
+            "ippu": 0,
+            "afolu": 0,
+        },
+        "AdaptationEffectiveness": "medium",
+        "CostInvestmentNeeded": "medium",
+        "TimelineForImplementation": "5-10 years",
+        "AdaptationEffectivenessPerHazard": {},
+    }
 
-    # Create a copy of the DataFrame to avoid modifying the original
-    df_transformed = df.copy()
+    def score_against_baseline(single_action: dict) -> float:
+        # Build pair (action vs baseline)
+        df_single = build_df(city, single_action, baseline_action)
+        df_single = df_single.copy()
 
-    # Prepare the data for ML comparison (feature engineering)
-    df_transformed = prepare_emission_reduction_data_single_diff(df_transformed)
-    df_transformed = prepare_action_type_data(df_transformed)
-    df_transformed = prepare_cost_investment_needed_data(df_transformed)
-    df_transformed = prepare_timeline_data(df_transformed)
-    df_transformed = prepare_adaptation_effectiveness_data_per_hazard(df_transformed)
-    df_transformed = process_ccra_hazards_adaptation_effectiveness_per_hazard(
-        df_transformed
-    )
-    df_transformed = prepare_co_benefits_data_single_diff(df_transformed)
-    df_transformed = prepare_biome_data(df_transformed)
+        # Apply the same feature engineering pipeline
+        df_single = prepare_emission_reduction_data_single_diff(df_single)
+        df_single = prepare_action_type_data(df_single)
+        df_single = prepare_cost_investment_needed_data(df_single)
+        df_single = prepare_timeline_data(df_single)
+        df_single = prepare_adaptation_effectiveness_data_per_hazard(df_single)
+        df_single = process_ccra_hazards_adaptation_effectiveness_per_hazard(df_single)
+        df_single = prepare_co_benefits_data_single_diff(df_single)
+        df_single = prepare_biome_data(df_single)
+        df_single = prepare_final_features(df_single)
 
-    # Final feature cleanup, removing all columns that are not used in the model
-    df_transformed = prepare_final_features(df_transformed)
+        # Validate no missing values
+        missing_columns_local = df_single.columns[df_single.isna().any()].tolist()
+        df_single.dropna(inplace=True)
+        if df_single.empty:
+            error_message = (
+                f"ml_comparator.py:\n"
+                f"Empty dataframe due to missing values when scoring against baseline!\n"
+                f"City: {city.get('locode')}\n"
+                f"Action: {single_action.get('ActionID')}\n"
+                f"Columns with missing values: {missing_columns_local}"
+            )
+            logger.error(error_message)
+            raise ValueError(error_message)
 
-    # Before dropping rows, check which columns have missing values
-    missing_columns = df_transformed.columns[df_transformed.isna().any()].tolist()
-    # Dropping empty rows
-    # If after transformation a row has missing values, it will be dropped
-    # Since we only pass in one pair at a time, the df will be empty if there are missing values
-    df_transformed.dropna(inplace=True)
+        # Probability that single_action beats the baseline
+        probabilities = loaded_model.predict_proba(df_single)
+        return float(probabilities[0][1])
 
-    if df_transformed.empty:
-        error_message = (
-            f"ml_comparator.py:\n"
-            f"Empty dataframe due to missing values!\n"
-            f"City: {city['locode']}\n"
-            f"Action A: {action_A['ActionID']}\n"
-            f"Action B: {action_B['ActionID']}\n"
-            f"Columns with missing values: {missing_columns}"
-        )
-        logger.error(error_message)
-        raise ValueError(error_message)
+    score_A = score_against_baseline(action_A)
+    score_B = score_against_baseline(action_B)
 
-    logger.debug("DataFrame input for model: \n%s", df_transformed.T)
+    if score_A > score_B:
+        return 1
+    if score_A < score_B:
+        return -1
 
-    # Make a prediction with the model
-    # You can customize threshold and margin here with e.g. threshold=0.5 and margin=0.025
-    # Only use for multi-class (e.g. 1, 0, -1) setting
-    # If used, predict_xgb return values need to be adjusted.
-    prediction = predict_xgb(df_transformed)
-
-    # (Optional for explanation) Create a SHAP waterfall plot
-    # create_shap_waterfall(df_transformed, loaded_model)
-
-    return prediction
+    # Deterministic tie-breaker to ensure antisymmetry and stability
+    id_A = str(action_A.get("ActionID"))
+    id_B = str(action_B.get("ActionID"))
+    return 1 if id_A < id_B else -1
 
 
 if __name__ == "__main__":
