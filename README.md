@@ -1,3 +1,7 @@
+> ⚠️ **Archived Repository**  
+> This repo has been moved to [Open-Earth-Foundation/CityCatalyst/hiap](https://github.com/Open-Earth-Foundation/CityCatalyst/tree/develop/hiap).  
+> It is no longer maintained here.
+
 This is the mono repository for High Impact Actions Prioritizer (HIAP).
 
 It contains all the logic for prioritizing actions and creating implementation plans.
