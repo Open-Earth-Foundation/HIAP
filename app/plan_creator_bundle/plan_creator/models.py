@@ -39,6 +39,12 @@ class CityData(BaseModel):
 
 class PlanRequest(BaseModel):
     cityData: CityData
+    countryCode: str = Field(
+        default="BR",  # TODO: Field should be required but for now we default to Brazil
+        min_length=2,
+        max_length=2,
+        description="ISO 3166-1 alpha-2 code",
+    )
     actionId: str = Field(..., min_length=1, description="Action ID")
     language: str = Field(
         default="en", min_length=2, max_length=2, description="ISO Language code"
@@ -48,7 +54,7 @@ class PlanRequest(BaseModel):
 # --- Response models ---
 
 
-class StartPlanCreationResponse(BaseModel):
+class StartTaskResponse(BaseModel):
     taskId: str
     status: str
 
@@ -59,7 +65,9 @@ class CheckProgressResponse(BaseModel):
 
 
 class Introduction(BaseModel):
-    description: str
+    city_description: str
+    action_description: str
+    national_strategy_explanation: str
 
 
 class Subaction(BaseModel):
@@ -182,14 +190,30 @@ class PlanCreatorMetadata(BaseModel):
     cityName: str
     actionId: str
     actionName: str
+    language: str
     createdAt: datetime
 
 
-LanguageCode = str  # should be ISO 639-1 codes like 'en', 'es', 'pt'
+# LanguageCode = str  # should be ISO 639-1 codes like 'en', 'es', 'pt'
 
 
 class PlanResponse(BaseModel):
     metadata: PlanCreatorMetadata = Field(description="Metadata for the plan creator")
     content: PlanContent = Field(
         description="The plan content in the requested language"
+    )
+
+
+# --- Translate plan request model ---
+
+
+class TranslatePlanRequest(BaseModel):
+    inputPlan: PlanResponse = Field(
+        description="The plan to translate. It is a PlanResponse object like the one returned by the get_plan endpoint."
+    )
+    inputLanguage: str = Field(
+        ..., min_length=2, max_length=2, description="ISO Language code"
+    )
+    outputLanguage: str = Field(
+        ..., min_length=2, max_length=2, description="ISO Language code"
     )

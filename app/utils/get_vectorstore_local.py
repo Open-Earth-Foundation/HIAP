@@ -4,6 +4,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from pathlib import Path
 from typing import Optional
+from chromadb import PersistentClient
 
 # Global dictionary to store loaded vector stores
 VECTOR_STORES = {}
@@ -20,14 +21,19 @@ def load_vectorstore(
     collection_name: str, embedding_model: str = "text-embedding-3-large"
 ) -> Optional[Chroma]:
     """
-    Loads an existing vector store from folder /vector_stores and returns it.
-    Looks for the vector store in the folder /vector_stores/collection_name.
+    Loads an existing vector store from folder /runtime_data/vector_stores and returns it.
+    Looks for the vector store in the folder /runtime_data/vector_stores/collection_name.
 
     Input: collection_name (str), embedding_model (str)
     Returns: vector_store (Chroma)
     """
 
-    vector_store_path = Path(__file__).parent.parent / "vector_stores" / collection_name
+    vector_store_path = (
+        Path(__file__).parent.parent
+        / "runtime_data"
+        / "vector_stores"
+        / collection_name
+    )
 
     if vector_store_path.exists():
         print(f"Loading vector store {collection_name}...")
@@ -38,15 +44,17 @@ def load_vectorstore(
             model=embedding_model,
         )
 
+        client = PersistentClient(path=str(vector_store_path))
+
         # Load vector store
         vector_store = Chroma(
+            client=client,
             collection_name=collection_name,
             embedding_function=embeddings,
-            persist_directory=str(vector_store_path),
         )
 
         print(
-            f"Vector Store loaded with: {len(vector_store.get()['documents'])} documents\n"
+            f"Vector Store loaded with: {vector_store._collection.count()} documents\n"
         )
 
         return vector_store

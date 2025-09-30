@@ -1,25 +1,24 @@
-import os
 import logging
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, Dict, Any, Literal
 from langchain.tools import tool
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langchain.schema import Document
-from langchain_tavily import TavilySearch
 from openai import OpenAI
-
-from plan_creator_bundle.utils.get_vectorstore_local import get_vectorstore
-
-# Get TAVILY SEARCH MODE from environment variable
-TAVILY_SEARCH_MODE = os.getenv("TAVILY_SEARCH_MODE", "basic")
+from utils.get_vectorstore_local import get_vectorstore
+from utils.get_json_file import get_json_from_file
 
 logger = logging.getLogger(__name__)
 
 
 # Define tools for each agent
-# The document_retriever_tool is used to retrieve relevant information about Brazil's national climate strategy.
+# The document_retriever_tool is used to retrieve relevant information about a country's national climate strategy.
 # If further documents are added, these should be added to a seperate collection and a separate tool should be defined for each collection
 # so that the LLM can more accurately retrieve information from the correct collection.
+
+
+# The following tool is for the implementation in the legacy plan creator.
+# DO NOT make changes to this tool.
 @tool
 def retriever_main_action_tool(
     search_query: str,
@@ -40,7 +39,7 @@ def retriever_main_action_tool(
     - Start with broad queries and progressively narrow down the search query.
     """
 
-    print("retriever_main_action_tool")
+    logger.info("retriever_main_action_tool")
 
     vector_store = get_vectorstore(collection_name="all_docs_db_small_chunks")
 
@@ -66,8 +65,8 @@ def retriever_main_action_tool(
 
     metadata_filter = {"main_action": {"$eq": True}}
 
-    print("search_query", search_query)
-    print("metadata_filter", metadata_filter)
+    logger.info("search_query", search_query)
+    logger.info("metadata_filter", metadata_filter)
 
     docs_and_scores = vector_store.similarity_search_with_relevance_scores(
         query=search_query,
@@ -171,29 +170,6 @@ def retriever_indicators_tool(
     )
 
     return docs_and_scores
-
-
-@tool
-def get_search_municipalities_tool(search_query: str):
-    """
-    Search for municipal institutions that might be relevant for the implementation of the specific climate action for the given city.
-    search_query: A search query in the national language.
-    """
-
-    logger.info(f"get_search_municipalities_tool called with query: {search_query}")
-
-    tavily_tool = TavilySearch(
-        max_results=2,
-        search_depth=TAVILY_SEARCH_MODE,  # change between 'basic' for testing and 'advanced' for production,
-    )
-    try:
-        logger.info("Invoking TavilySearchResults...")
-        result = tavily_tool.invoke({"query": search_query})
-        logger.debug(f"TavilySearchResults returned: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Error in TavilySearchResults: {str(e)}", exc_info=True)
-        return f"Error during search: {str(e)}"
 
 
 # The reasoning_tool is experimental. It increases the time a lot but could be used to make sure that the retrieved chunks are relevant.

@@ -1,4 +1,6 @@
 name: HIAP Deployment Develop
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -6,28 +8,34 @@ on:
     branches:
       - develop
     paths:
-      - "**" # Since your project is not in a backend folder, watch all changes
-      - ".github/workflows/backend.yml"
+      - "**"
+      - ".github/workflows/develop.yml"
   pull_request:
     branches:
       - develop
     types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: hiap-develop
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
-      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      LANGCHAIN_PROJECT: hiap-test
-      LANGCHAIN_PROJECT_NAME_PRIORITIZER: hiap-test-prioritizer
+      LANGCHAIN_PROJECT: hiap-dev
+      LANGCHAIN_PROJECT_NAME_PRIORITIZER: hiap-dev-prioritizer
+      LANGCHAIN_PROJECT_NAME_PLAN_TRANSLATION: hiap-dev-plan-translation
       LANGCHAIN_ENDPOINT: https://api.smith.langchain.com
-      LANGCHAIN_TRACING_V2: true
-      S3_BUCKET_NAME: openearth.cap
-      TAVILY_SEARCH_MODE: basic
+      LANGCHAIN_TRACING_V2: false
+      OPENAI_MODEL_NAME_EXPLANATIONS: gpt-4.1-mini
+      OPENAI_MODEL_NAME_PLAN_CREATOR: gpt-4.1
+      OPENAI_MODEL_NAME_PLAN_CREATOR_LEGACY: gpt-4.1
+      OPENAI_MODEL_NAME_PLAN_TRANSLATION: gpt-4.1-mini
+      EXPLANATIONS_ENABLED: false
+      XGBOOST_NUM_THREADS: 1
+      BULK_CONCURRENCY: 1
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +63,9 @@ jobs:
           pytest -m "not slow"
 
   build:
+    permissions:
+      contents: read
+      packages: write
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop'
@@ -115,17 +126,21 @@ jobs:
 
           # Set environment variables for development
           kubectl set env deployment/hiap-dev \
-            OPENAI_MODEL_NAME_EXPLANATIONS=gpt-4.1-nano \
-            OPENAI_MODEL_NAME_PLAN_CREATOR_LEGACY=gpt-4.1-mini \
+            OPENAI_MODEL_NAME_EXPLANATIONS=gpt-4.1-mini \
+            OPENAI_MODEL_NAME_PLAN_CREATOR=gpt-4.1 \
+            OPENAI_MODEL_NAME_PLAN_CREATOR_LEGACY=gpt-4.1 \
+            OPENAI_MODEL_NAME_PLAN_TRANSLATION=gpt-4.1-mini \
             LANGCHAIN_PROJECT=hiap-dev \
             LANGCHAIN_PROJECT_NAME_PRIORITIZER=hiap-dev-prioritizer \
+            LANGCHAIN_PROJECT_NAME_PLAN_TRANSLATION=hiap-dev-plan-translation \
             LANGCHAIN_ENDPOINT=https://api.smith.langchain.com \
             LANGCHAIN_TRACING_V2=true \
             S3_BUCKET_NAME=openearth.cap \
-            TAVILY_SEARCH_MODE=basic \
+            EXPLANATIONS_ENABLED=true \
+            XGBOOST_NUM_THREADS=1 \
+            BULK_CONCURRENCY=10 \
             OPENAI_API_KEY=${{secrets.OPENAI_API_KEY}} \
             LANGCHAIN_API_KEY=${{secrets.LANGCHAIN_API_KEY}} \
-            TAVILY_API_KEY=${{secrets.TAVILY_API_KEY}} \
             AWS_ACCESS_KEY_ID=${{secrets.AWS_ACCESS_KEY_ID}} \
             AWS_SECRET_ACCESS_KEY=${{secrets.AWS_SECRET_ACCESS_KEY}}
 
